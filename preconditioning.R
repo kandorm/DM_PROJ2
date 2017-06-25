@@ -122,24 +122,6 @@ text_pre <- function(full_text) {
   return(reuters)
 }
 
-dataframe_deploy <- function(dataframe, colname) {
-  data_frame = data.frame()
-  for(i in 1:nrow(dataframe)) {
-#    if(i%%1000 == 0)
-#      print(i)
-    news <- dataframe[i,]
-    if(length(dataframe[[colname]][[i]]) > 1) {
-      for(class in dataframe[[colname]][[i]]) {
-        news$Classify = class
-        data_frame = rbind.data.frame(data_frame, news)
-      }
-    } else {
-      data_frame = rbind.data.frame(data_frame, news)
-    }
-  }
-  return(data_frame)
-}
-
 create_label <- function(classify, class_list) {
   label <- matrix(nrow = length(classify), ncol = length(class_list))
   colnames(label) <- class_list
@@ -157,47 +139,17 @@ target_path = paste(current_path, "samples_50000", sep = '/')
 library(NLP)
 library(tm)
 
-#take info of news and write into 'dataframe.csv'(no precondition)
 dataframe = build_dataframe(target_path)
 write.csv(dataframe, file = "./precondition/dataframe.csv")
-dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
 
-#compute DTM of News with full_text and removeSparseTerms with sparse=0.98
-#write DTM into 'dtm_dataframe.csv'
-#dataframe = read.table(file = "dataframe.csv", sep = ",", header = TRUE)
+#dataframe = read.table(file = "./precondition/dataframe.csv", sep = ",", header = TRUE)
 #dataframe$X = NULL
-#dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
-data = dataframe
-data = data[complete.cases(data[, 'Text']), ]
-reuters = text_pre(data[["Text"]])
-dtm_ctrl = list(removePunctuation = TRUE, weighting = weightTfIdf)
-dtm = DocumentTermMatrix(reuters, dtm_ctrl)
-dtm_dataframe = as.data.frame(as.matrix(removeSparseTerms(dtm, 0.98)))
-write.csv(dtm_dataframe, file = "./precondition/dtm_dataframe.csv")
-
-class_list = dimnames(table(unlist(dataframe$Classify)))[[1]]
-label = create_label(data$Classify, class_list)
-write.csv(as.data.frame(label), file = "./precondition/label.csv")
-
-#dataframe = read.table(file = "dataframe.csv", sep = ",", header = TRUE)
-#dataframe$X = NULL
-#dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
-c_dataframe = dataframe
-c_dataframe = dataframe_deploy(dataframe, "Classify")
-rownames(c_dataframe) = c(1:nrow(c_dataframe))
-c_dataframe$Classify = unlist(c_dataframe$Classify)
-write.csv(c_dataframe, file = "./precondition/c_dataframe.csv")
-
-#c_dataframe = read.table(file = "./precondition/c_dataframe.csv", sep = ",", header = TRUE)
-#c_dataframe$X = NULL
-c_data = c_dataframe
+c_data = dataframe
 c_data = c_data[complete.cases(c_data[, 'Classify']), ]
 c_data = c_data[complete.cases(c_data[, 'Text']), ]
-c_reuters = text_pre(c_data[["Text"]])
-c_dtm_ctrl = list(removePunctuation = TRUE, weighting = weightTfIdf)
-c_dtm = DocumentTermMatrix(c_reuters, c_dtm_ctrl)
-c_dtm_dataframe = data.frame(row_ind=c_dtm$i, col_ind=c_dtm$j, data=c_dtm$v)
-write.csv(c_dtm_dataframe, file = "./precondition/c_dtm_dataframe.csv")
+write.csv(c_data, file = "./precondition/clean_dataframe.csv")
 
-c_classify_dataframe = data.frame(classify = c_data$Classify)
-write.csv(c_classify_dataframe, file = "./precondition/c_classify_dataframe.csv")
+c_data$Classify <- sapply(as.vector(c_data$Classify), strsplit, split="/")
+class_list = dimnames(table(unlist(c_data$Classify)))[[1]]
+label = create_label(c_data$Classify, class_list)
+write.csv(as.data.frame(label), file = "./precondition/clean_target.csv")
