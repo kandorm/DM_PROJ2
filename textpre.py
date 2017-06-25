@@ -7,7 +7,6 @@ from sklearn.feature_extraction.text import CountVectorizer
 import string
 import re
 
-
 def cmpt_tf_idf(path):
     def remove_nword(text):
         for item in string.punctuation:
