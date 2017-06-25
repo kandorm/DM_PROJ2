@@ -122,221 +122,82 @@ text_pre <- function(full_text) {
   return(reuters)
 }
 
-#Create directory in this workspace named dname and output reuters into it,
-#if there is file or directory has the same name, if will not work
-#param:
-#    dname : directory name
-#    reuters : reuters
-#no return
-reuters_output <- function(dname, reuters) {
-  library(NLP)
-  library(tm)
-  if(!file.exists(dname)) {
-    dir.create(dname)
-    c_path = getwd()
-    setwd(paste(c_path, dname, sep = "/"))
-    writeCorpus(reuters)
-    setwd(c_path) 
-  }
-}
-
-#build bag of words with reuters
-#param:
-#    reuters : reuters
-#return a matrix of bag of words
-build_BOW <- function(reuters) {
-  tdm = TermDocumentMatrix(reuters)
-  matrix = as.matrix(tdm)
-  return(matrix)
-  
-}
-
-#Take words which freq over 100
-#param:
-#    m : tdm matrix
-#return a dataframe with word and freq
-words_filter <- function(m) {
-  word_freqs = sort(rowSums(m), decreasing=TRUE)
-  dm = data.frame(word = names(word_freqs), freq = word_freqs)
-  result = subset(dm, freq > 100)
-  return(result)
-}
-
-#paint wordcloud
-#param:
-#    m : tdm matrix
-#no return and paint a png image in path getwd()
-paint_wordcloud <- function(m) {
-  library(RColorBrewer)
-  library(wordcloud)
-  
-  word_freqs = sort(rowSums(m), decreasing=TRUE)
-  dm = data.frame(word = names(word_freqs[1:100]), freq = word_freqs[1:100])
-  png(file="wordcloud.png", bg="white",width = 480, height = 480)
-  wordcloud(dm$word, dm$freq, random.order = FALSE, colors = brewer.pal(8, "Dark2"))
-  dev.off()  
-}
-
-#paint wordlength_histogram
-#param:
-#    m : tdm matrix
-#no return and paint a png image in path getwd()
-paint_wordlength_histogram <- function(m) {
-  library(ggplot2)
-  dictionary = row.names(m)
-  wordlength = nchar(dictionary)
-  png(file="wordlength_histogram.png", bg="white",width = 980, height = 480)
-  barplot(table(unlist(wordlength)), col = "lightblue")
-  dev.off()
-}
-
-#paint classify_histogram
-#param:
-#    classify : classify vector
-#no return and paint a png image in path getwd()
-paint_classify_histogram <- function(classify) {
-  library(ggplot2)
-  png(file="classify_histogram.png", bg="white",width = 480, height = 3000)
-  barplot(table(unlist(classify)), col = "lightblue", horiz = TRUE)
-  dev.off()
-}
-
-#paint month_histogram
-#param:
-#    month : month vector
-#no return and paint a png image in path getwd()
-paint_month_histogram <- function(month) {
-  library(ggplot2)
-  png(file="month_histogram.png", bg="white",width = 480, height = 480)
-  barplot(table(unlist(month)), col = "lightblue")
-  dev.off()
-}
-
-build_cosine <- function(m) {
-  result = matrix(NA, nrow = ncol(m), ncol = ncol(m))
-  for(i in 1:ncol(m)) {
-    for(j in i:ncol(m)) {
-      cosine = sum(m[,i]*m[,j])/sqrt(sum(m[,i]^2)*sum(m[,j]^2))
-      if(is.nan(cosine)){
-        cosine = 0
+dataframe_deploy <- function(dataframe, colname) {
+  data_frame = data.frame()
+  for(i in 1:nrow(dataframe)) {
+#    if(i%%1000 == 0)
+#      print(i)
+    news <- dataframe[i,]
+    if(length(dataframe[[colname]][[i]]) > 1) {
+      for(class in dataframe[[colname]][[i]]) {
+        news$Classify = class
+        data_frame = rbind.data.frame(data_frame, news)
       }
-      result[i,j] = cosine
-    }
-    print(paste("cosine count num ", i))
-  }
-  return(result)
-}
-
-inclass_similarity <- function(cosine, class_list) {
-  result <- list()
-  for(class in names(class_list)){
-    #    print(class)
-    result[[class]]=0
-    for(i in 3:length(class_list[[class]])){
-      for(j in 2:(i-1)){
-        x=class_list[[class]][[i]]
-        y=class_list[[class]][[j]]
-        if(x>y){
-          z=x
-          x=y
-          y=z
-        }
-        result[[class]]=result[[class]] + cosine[x,y]
-      }
-    }
-    #    print(result[[class]])
-  }
-  for( class_item in names(result) ) {
-    result[[class_item]]=result[[class_item]]/length(class_list[[class_item]])
-  }
-  return(result)
-}
-
-pro_class_list <- function(classify) {
-  result<- list()
-  class_list <- list()
-  class_table <- table(unlist(classify))
-  item_num=0
-  for(item in classify) {
-    item_num=item_num+1
-    if(is.na(item))
-      next
-    for( class in item ){
-      if(is.null(result[class][[1]])) {
-        result[class]=0
-        class_list[[class]] = vector('list', class_table[[class]]+1)
-        class_list[[class]][[1]]=1
-      }
-      class_list[[class]][[1]]=class_list[[class]][[1]]+1
-      class_list[[class]][[ class_list[[class]][[1]] ]]=item_num
+    } else {
+      data_frame = rbind.data.frame(data_frame, news)
     }
   }
-  return(class_list)
+  return(data_frame)
 }
 
-cal_ave_sim <- function (class1, class2, class_list,cosine){
-  result = 0
-  len1 = length(class_list[[class1]])
-  len2 = length(class_list[[class2]])
-  for(i in 2:len1) {
-    ar1 = class_list[[class1]][[i]]
-    for(j in 2:len2 ){
-      ar2 = class_list[[class2]][[j]]
-      if(ar1>ar2){
-        t=ar1
-        ar1=ar2
-        ar2=t
-      }
-      result=result + cosine[ar1,ar2]
+create_label <- function(classify, class_list) {
+  label <- matrix(nrow = length(classify), ncol = length(class_list))
+  colnames(label) <- class_list
+  for(i in 1:length(classify)) {
+    for(j in 1:length(class_list)) {
+      label[i, j] <- ifelse(is.element(class_list[j], classify[[i]]), 1, 0)
     }
   }
-  result = result / ((len1-1)*(len2-1))
-  return(result)
+  return(label)
 }
-
 
 current_path = getwd()
 target_path = paste(current_path, "samples_50000", sep = '/')
 
-#dataframe = build_dataframe(target_path)
-#write.csv(dataframe, file = "dataframe.csv")
+library(NLP)
+library(tm)
 
-dataframe = read.csv(file = "dataframe.csv", sep = ",", header = TRUE)
-#print("News dataframe make success! Please check file 'dataframe.csv'!")
-
-reuters = text_pre(dataframe[["Text"]])
-#reuters_output('Pre', reuters)
-#print("Data clean success! Please check directory 'Pre/'")
-
-dtm_ctrl = list(weighting = weightTfIdf)
-dtm = DocumentTermMatrix(reuters, dtm_ctrl)
-#m = build_BOW(reuters)
-#print("BOW make success! Please check variable 'm'!")
-
-#wordover100 = words_filter(m)
-#write.csv(wordover100, file="wordfilter.csv")
-#print("Words which length over 100 search success! Please check file 'wordfilter.csv'!")
-
-#paint_wordcloud(m)
-#print("Wordcloud make success! Please check file 'wordcloud.png'!")
-
-#paint_wordlength_histogram(m)
-#print("WordLength histogram make success! Please check file 'wordlength_histogram.png'!")
-
+#take info of news and write into 'dataframe.csv'(no precondition)
+dataframe = build_dataframe(target_path)
+write.csv(dataframe, file = "./precondition/dataframe.csv")
 dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
-#paint_classify_histogram(dataframe[["Classify"]])
-#print("Classify histogram make success! Please check file 'classify_histogram.png'!")
 
-#paint_month_histogram(dataframe[["Month"]])
-#print("Month histogram make success! Please check file 'classify_histogram.png'!")
+#compute DTM of News with full_text and removeSparseTerms with sparse=0.98
+#write DTM into 'dtm_dataframe.csv'
+#dataframe = read.table(file = "dataframe.csv", sep = ",", header = TRUE)
+#dataframe$X = NULL
+#dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
+data = dataframe
+data = data[complete.cases(data[, 'Text']), ]
+reuters = text_pre(data[["Text"]])
+dtm_ctrl = list(removePunctuation = TRUE, weighting = weightTfIdf)
+dtm = DocumentTermMatrix(reuters, dtm_ctrl)
+dtm_dataframe = as.data.frame(as.matrix(removeSparseTerms(dtm, 0.98)))
+write.csv(dtm_dataframe, file = "./precondition/dtm_dataframe.csv")
 
-#cosine_matrix = build_cosine(m)
-#print("Cosine matrix make success! Please check variable 'cosine_matrix'!")
-# question 2.2
-#class_list = pro_class_list(dataframe[['Classify']])
-#inclass_sim= inclass_similarity(cosine_matrix, class_list)
-#print("inclass_sim make success! Please check variable 'inclass_sim'!")
-# question 2.3
-# ca1='Travel'
-# ca2='World'
-# cal_ave_sim(ca1,ca2,class_list,cosine_matrix)
+class_list = dimnames(table(unlist(dataframe$Classify)))[[1]]
+label = create_label(data$Classify, class_list)
+write.csv(as.data.frame(label), file = "./precondition/label.csv")
+
+#dataframe = read.table(file = "dataframe.csv", sep = ",", header = TRUE)
+#dataframe$X = NULL
+#dataframe$Classify <- sapply(as.vector(dataframe$Classify), strsplit, split="/")
+c_dataframe = dataframe
+c_dataframe = dataframe_deploy(dataframe, "Classify")
+rownames(c_dataframe) = c(1:nrow(c_dataframe))
+c_dataframe$Classify = unlist(c_dataframe$Classify)
+write.csv(c_dataframe, file = "./precondition/c_dataframe.csv")
+
+#c_dataframe = read.table(file = "./precondition/c_dataframe.csv", sep = ",", header = TRUE)
+#c_dataframe$X = NULL
+c_data = c_dataframe
+c_data = c_data[complete.cases(c_data[, 'Classify']), ]
+c_data = c_data[complete.cases(c_data[, 'Text']), ]
+c_reuters = text_pre(c_data[["Text"]])
+c_dtm_ctrl = list(removePunctuation = TRUE, weighting = weightTfIdf)
+c_dtm = DocumentTermMatrix(c_reuters, c_dtm_ctrl)
+c_dtm_dataframe = data.frame(row_ind=c_dtm$i, col_ind=c_dtm$j, data=c_dtm$v)
+write.csv(c_dtm_dataframe, file = "./precondition/c_dtm_dataframe.csv")
+
+c_classify_dataframe = data.frame(classify = c_data$Classify)
+write.csv(c_classify_dataframe, file = "./precondition/c_classify_dataframe.csv")
